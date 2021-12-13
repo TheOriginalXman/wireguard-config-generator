@@ -1,0 +1,33 @@
+[
+    {
+        "name" : "Interface 1",
+        "filePath" : "/Users/prajanchauhan/Desktop/interface_config/",
+        "port" : "51820",
+        "serverSubnet" : "10.0.0.1/24",
+        "natInterface" : {
+            "ipv4" : "eth0",
+            "ipv6" : "eth1"
+        },
+        "endpoint" : "www.example.com",
+        "peer_cidr" : "32",
+        "clients" : [
+            {
+                "name" : "Peer 1",
+                "dns" : "8.8.8.8",
+                "psk" : true,
+                "routeAllTraffic" : true,
+            },
+            {
+                "name" : "Peer 2",
+                "dns" : "8.8.4.4",
+                "psk" : true,
+                "routeAllTraffic" : false,
+                "server_cidr" : "32",
+                "allowedIps" : [
+                    "192.168.1.2",
+                    "192.168.0.0/24"
+                ]
+            }
+        ]
+    }
+]
