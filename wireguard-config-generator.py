@@ -60,6 +60,32 @@ class Blueprint:
         print('hello')
         pass
 
+    def __init__(self, **kwargs):
+
+        self.serverName = ''
+        self.interfaceConfigFilePath = ''
+        self.listeningPort = ''
+        self.serverSubnet = {}
+        self.ipv4 = {}
+
+        if len(kwargs) == 0:
+            self.loadEnvironmentDefaults()
+
+    def setServerSubnet(self, subnetValue):
+        self.serverSubnet = {
+            "value" : subnetValue,
+            "octet1" : int(subnetValue.split('.')[0]),
+            "octet2" : int(subnetValue.split('.')[1]),
+            "octet3" : int(subnetValue.split('.')[2]),
+            "octet4" : int(subnetValue.split('.')[3].split('/')[0]),
+            "cidr" : int(subnetValue.split('.')[3].split('/')[1])
+        }
+
+
+    def loadEnvironmentDefaults(self):
+        print('hello')
+        pass
+
 # Set the listen port
 
 # listen_port = f"{os.getenv('PORT')}"
