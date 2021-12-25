@@ -1,4 +1,5 @@
 import qrcode
+import json
 import subprocess
 import sys
 import os
@@ -32,84 +33,35 @@ env = {
     "peerConfigPath" : os.getenv('PEER_CONFIG_LOCATION')
     # TODO add ipv6 protocol
     }
-class Blueprint:
 
-    def __init__(self, **kwargs):
+def processFile(filePath):
+    bp = open(filePath)
+    bp = json.loads(bp)
 
-        self.serverName = ''
-        self.interfaceConfigFilePath = ''
-        self.listeningPort = ''
-        self.serverSubnet = {}
-        self.ipv4 = {}
+    setServerSubnet(bp)
 
-        if len(kwargs) == 0:
-            self.loadEnvironmentDefaults()
+            # self.serverName = bp['name']    
+            # self.interfaceConfigFilePath = bp['filePath']
+            # self.listeningPort = bp['port']
+            # self.serverSubnet = self.setServerSubnet(bp['serverSubnet'])
+            # self.interfaceName = bp['natInterface']
+            # self.endpoint = bp['endpoint']
+            # self.peer_cidr = bp['peer_cidr']
+            # self.clients = getClients
+            
 
-    def setServerSubnet(self, subnetValue):
-        self.serverSubnet = {
-            "value" : subnetValue,
-            "octet1" : int(subnetValue.split('.')[0]),
-            "octet2" : int(subnetValue.split('.')[1]),
-            "octet3" : int(subnetValue.split('.')[2]),
-            "octet4" : int(subnetValue.split('.')[3].split('/')[0]),
-            "cidr" : int(subnetValue.split('.')[3].split('/')[1])
-        }
-
-
-    def loadEnvironmentDefaults(self):
-        print('hello')
-        pass
-
-# Set the listen port
-
-# listen_port = f"{os.getenv('PORT')}"
-
-# # Set the endpoint
-# endpoint = f"{os.getenv('ENDPOINT_URL')}:{listen_port}"
-
-# # Number of needed clients
-# clients = int(os.getenv('NUMBER_OF_CLIENTS'))
-# # Add ipv6 protocol to all Configs
-# # ipv6 = strToBool(os.getenv('IPV6'))
-
-# # Set preshared_key to True to create preshared keys or False if not needed
-# preshared_key = eval(os.getenv('PSK'))
-
-# # Set your DNS Server like "1.1.1.1" or empty string "" if not needed
-# # maybe you want to use a dns server on your server e.g. 192.168.1.1
-# dns = f"{os.getenv('DNS')}"
-
-# # Set your vpn tunnel network (example is for 10.99.99.0/24)
-# defaultTunnel = os.getenv('TUNNEL_NET').split('.')
-# ipnet_tunnel_1 = int(defaultTunnel[0])
-# ipnet_tunnel_2 = int(defaultTunnel[1])
-# ipnet_tunnel_3 = int(defaultTunnel[2])
-# ipnet_tunnel_4 = int(defaultTunnel[3].split('/')[0])
-# ipnet_tunnel_cidr = int(defaultTunnel[3].split('/')[1])
-
-# # Set allowed IPs (this should be the network of the server you want to access)
-# # If you want to route all traffic over the VPN then set tunnel_0_0_0_0 = True, the network in allowed ips will then be ignored
-# allowed_ips = f"{os.getenv('ALLOWEDIPS')}"
-# tunnel_0_0_0_0 = False
-
-# # If you need iptables rules then set iptables= "eth0" (replace eth0 with the name of your network card) or iptables = "" if no rules needed
-# iptables = f"{os.getenv('IPTABLES')}"
-
-# # Server name
-# env['serverName'] = f"{os.getenv('SERVER_NAME')}"
-
-# # Path to where interface config file will be stored
-# interfacePath = os.getenv('INTERFACE_CONFIG_LOCATION')
-
-# # Path where peers config and other files will be stored
-# clientPath = os.getenv('PEER_CONFIG_LOCATION')
-
-
+def setServerSubnet(bp):
+     subnetValue = bp['serverSubnet']
+     bp['serverSubnet'] = {
+                            "value" : subnetValue,
+                            "octet1" : int(subnetValue.split('.')[0]),
+                            "octet2" : int(subnetValue.split('.')[1]),
+                            "octet3" : int(subnetValue.split('.')[2]),
+                            "octet4" : int(subnetValue.split('.')[3].split('/')[0]),
+                            "cidr" : int(subnetValue.split('.')[3].split('/')[1])
+                        }
+    
 ################### Do not edit below this line ##################
-
-wg_priv_keys = []
-wg_pub_keys = []
-wg_psk = []
 
 
 def main(args):
@@ -155,8 +107,8 @@ def main(args):
     for opt, arg in options:
         if opt in ('-f', '--file'):
             print(f"Processing {arg}")
-            # TODO process JSON or YML files
-            # processFile(arg)
+            blueprint = processFile(arg)
+            generate(blueprint)
             break
         elif opt in ('-n', '--dns'):
             env['dns'] = arg
@@ -185,66 +137,100 @@ def main(args):
     # print 'OUTPUT    :', output_filename
     # print 'REMAINING :', remainder
 
-def generate():
+def generate(blueprint):
     #Validate inputs
     # TODO create validation for inputs/globals
+
+    wg_priv_keys = []
+    wg_pub_keys = []
+    wg_psk = []
+
     # Gen-Keys
-    for x in range(env['clients']+1):
-        (privkey, pubkey, psk) = generate_wireguard_keys()
-        #psk = generate_wireguard_psk()
-        wg_priv_keys.append(privkey)
-        wg_pub_keys.append(pubkey)
-        wg_psk.append(psk)
+    for x in range(len(blueprint['clients'])+1):
+        keys = generate_wireguard_keys()
+
+        if x == 0:
+            blueprint['privateKey'] = keys[0]
+            blueprint['publicKey'] = keys[1]
+            blueprint['presharedKey'] = keys[2]
+        else:
+            blueprint['clients'][x-1]['privateKey'] = keys[0]
+            blueprint['clients'][x-1]['privateKey'] = keys[1]
+            blueprint['clients'][x-1]['privateKey'] = keys[2]
+
+        # wg_priv_keys.append(keys[0])
+        # wg_pub_keys.append(keys[1])
+        # wg_psk.append(keys[2])
+    server = serverConfig(blueprint)
+    serverFileLocation = f"{blueprint['filePath']}{blueprint['name']}.conf"
+
+    writeFiles(server, serverFileLocation)
+
+    for x in range(len(blueprint['clients'])):
+        peer = peerConfig(blueprint,blueprint['clients'][x])
+        peerFileLocation = f"{blueprint['clients'][x]['filePath']}{blueprint['clients'][x]['name']}.conf"
+
+        writeFiles(peer, peerFileLocation)
+        
+
+
+def writeFiles(config, location):
+    make_qr_code_png(config, f"{location}.png")
+    with open(f"{location}.conf", "wt+") as f:
+        f.write(config)
+
+def serverConfig(bp):
 
     ################# Server-Config ##################
-    server_config = f"[{env['serverName']}]\n" \
-        f"Address = {env['serverSubnet']['octet1']}.{env['serverSubnet']['octet2']}.{env['serverSubnet']['octet3']}.{env['serverSubnet']['octet4']+1}/{env['serverSubnet']['cidr']}\n" \
-        f"ListenPort = {env['listeningPort']}\n" \
-        f"PrivateKey = {wg_priv_keys[0]}\n"
-    if env['iptables']:
-        server_config += f"PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -t nat -A POSTROUTING -o {env['iptables']} -j MASQUERADE\n" \
-            f"PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -t nat -D POSTROUTING -o {env['iptables']} -j MASQUERADE\n"
+    server_config = f"[Interface]\n" \
+        f"# Name = {bp['name']}\n" \
+        f"Address = {bp['serverSubnet']['octet1']}.{bp['serverSubnet']['octet2']}.{bp['serverSubnet']['octet3']}.{bp['serverSubnet']['octet4']+1}/{bp['serverSubnet']['cidr']}\n" \
+        f"ListenPort = {bp['port']}\n" \
+        f"PrivateKey = {bp['privateKey']}\n"
 
-    for i in range(1, env['clients']+1):
-        server_config += f"[Peer {i}]\n" \
-            f"PublicKey = {wg_pub_keys[i]}\n" \
-            f"PresharedKey = {wg_psk[i]}\n" \
-            f"AllowedIPs = {env['serverSubnet']['octet1']}.{env['serverSubnet']['octet2']}.{env['serverSubnet']['octet3']}.{env['serverSubnet']['octet4']+1+i}/32\n"
+    if bp['natInterface'] and bp['natInterface']['ipv4']: #TODO add ipv6
+        server_config += f"PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -t nat -A POSTROUTING -o {bp['natInterface']['ipv4']} -j MASQUERADE\n" \
+            f"PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -t nat -D POSTROUTING -o {bp['natInterface']['ipv4']} -j MASQUERADE\n"
+
+    for x in range(len(bp['clients'])):
+        server_config += f"[Peer]\n" \
+            f"# Name = {bp['clients'][x]['name']}\n" \
+            f"PublicKey = {['clients'][x]['publicKey']}\n" \
+            f"PresharedKey = {['clients'][x]['presharedKey']}\n" \
+            f"AllowedIPs = {bp['serverSubnet']['octet1']}.{bp['serverSubnet']['octet2']}.{bp['serverSubnet']['octet3']}.{bp['serverSubnet']['octet4']+1+x}/32\n"
 
     print("*"*10 + " Server-Conf " + "*"*10)
     print(server_config)
-    make_qr_code_png(server_config, f"{env['interfaceConfigPath']}{env['serverName']}.png")
-    with open(f"{env['interfaceConfigPath']}{env['serverName']}.conf", "wt+") as f:
-        f.write(server_config)
 
+    return server_config
+
+def peerConfig(bp, client):
     ################# Client-Configs ##################
-    client_configs = []
-    for i in range(1, env['clients']+1):
-        client_config = f"[Interface]\n" \
-            f"Address = {env['serverSubnet']['octet1']}.{env['serverSubnet']['octet2']}.{env['serverSubnet']['octet3']}.{env['serverSubnet']['octet4']+1+i}/24\n" \
-            f"ListenPort = {env['listeningPort']}\n" \
-            f"PrivateKey = {wg_priv_keys[i]}\n"
 
-        if env['dns']:
-            client_config += f"DNS = {env['dns']}\n"
+    client_config = f"[Interface]\n" \
+        f"# Name = {client['name']}\n" \
+        f"Address = {bp['serverSubnet']['octet1']}.{bp['serverSubnet']['octet2']}.{bp['serverSubnet']['octet3']}.{bp['serverSubnet']['octet4']+1+}/24\n" \
+        f"PrivateKey = {client['privateKey']}\n"
 
-        client_config += f"[Peer]\n" \
-            f"PublicKey = {wg_pub_keys[0]}\n" \
-            f"PresharedKey = {wg_psk[i]}\n"
+    if client['dns']:
+        client_config += f"DNS = {client['dns']}\n"
 
-        if env['routeAllTraffic'] == False:
-            client_config += f"AllowedIPs = {env['allowedIps']}, {env['serverSubnet']['octet1']}.{env['serverSubnet']['octet2']}.{env['serverSubnet']['octet3']}.{env['serverSubnet']['octet4']+1}/32\n"
-        else:
-            client_config += f"DNS = 0.0.0.0/0\n"
+    client_config += f"[Peer]\n" \
+        f"# Name = {bp['name']}\n" \
+        f"PublicKey = {bp['publicKey']}\n" \
+        f"PresharedKey = {client['presharedKey']}\n" \
+        f"Endpoint = {bp['endpoint']:bp['port']}\n" 
+    
+    if client['keepAlive']:
+        client_config += f"PersistentKeepalive = {client['keepAlive']}"
 
-        client_config += f"Endpoint = {env['endpoint']}\n"
-        client_configs.append(client_config)
+    if client['routeAllTraffic'] == False:
+        client_config += f"AllowedIPs = {','.join(client['allowedIps'])}\n"
+    else:
+        client_config += f"AllowedIPs = 0.0.0.0/0\n"
 
-        print("*"*10 + f" Client-Conf {i} " + "*"*10)
-        print(client_config)
-        make_qr_code_png(client_config, f"{env['peerConfigPath']}client_{i}.png")
-        with open(f"{env['peerConfigPath']}client_{i}.conf", "wt+") as f:
-            f.write(client_config)
+    print("*"*10 + f" Client-Conf " + "*"*10)
+    print(client_config)
 
     #print("*"*10 + " Debugging " + "*"*10 )
     #print("*"*10 + " Priv-Keys " + "*"*10 )
@@ -260,10 +246,6 @@ def generate_wireguard_keys():
     #     f"echo '{privkey}' | wg pubkey", shell=True).decode("utf-8").strip()
     # psk = subprocess.check_output(
     #     "wg genkey", shell=True).decode("utf-8").strip()
-
-    privkey = f"TestPrivateKey" 
-    pubkey = f"TestPublicKey" 
-    psk = f"TestPresharedKey" 
 
     return (privkey, pubkey, psk)
 
