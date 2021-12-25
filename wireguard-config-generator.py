@@ -240,12 +240,12 @@ def peerConfig(bp, client):
 
 
 def generate_wireguard_keys():
-    # privkey = subprocess.check_output(
-    #     "wg genkey", shell=True).decode("utf-8").strip()
-    # pubkey = subprocess.check_output(
-    #     f"echo '{privkey}' | wg pubkey", shell=True).decode("utf-8").strip()
-    # psk = subprocess.check_output(
-    #     "wg genkey", shell=True).decode("utf-8").strip()
+    privkey = subprocess.check_output(
+        "wg genkey", shell=True).decode("utf-8").strip()
+    pubkey = subprocess.check_output(
+        f"echo '{privkey}' | wg pubkey", shell=True).decode("utf-8").strip()
+    psk = subprocess.check_output(
+        "wg genkey", shell=True).decode("utf-8").strip()
 
     return (privkey, pubkey, psk)
 
